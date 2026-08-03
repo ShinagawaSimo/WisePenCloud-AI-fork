@@ -56,14 +56,9 @@ pytest 的 API 测试使用 httpx.ASGITransport 直接调用 FastAPI App，不�
 
 ## 3. 本地启动
 
-当前分支绕过 Nacos，显式关闭 Nacos：
-
 ~~~bash
 cd /Users/julius/julProg/wisepen/WisePenCloud-AI-fork-simo/services/wisepen-sandbox-service
 
-NACOS_ENABLED=false \
-SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest \
-SANDBOX_BROWSER_NO_SANDBOX=--no-sandbox \
 PYTHONPATH=src:../wisepen-common/src \
 ../../.venv/bin/python -m uvicorn sandbox.main:app \
   --host 127.0.0.1 \
