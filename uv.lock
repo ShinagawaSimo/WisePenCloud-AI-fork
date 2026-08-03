@@ -3687,6 +3687,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+mongo = [
+    { name = "pymongo" },
+]
 test = [
     { name = "httpx" },
     { name = "pytest" },
@@ -3702,13 +3705,14 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.27,<2" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pymongo", marker = "extra == 'mongo'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
     { name = "pyyaml" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "wisepen-common", editable = "services/wisepen-common" },
 ]
-provides-extras = ["test"]
+provides-extras = ["test", "mongo"]
 
 [[package]]
 name = "wisepen-server-py"
