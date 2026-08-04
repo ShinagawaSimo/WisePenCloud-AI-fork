@@ -49,13 +49,8 @@ class SandboxStartupReconciler:
         self._metrics = repository.metrics
 
     async def reconcile(self) -> StartupReconcileResult:
-        list_managed = getattr(self._provider, "list_managed", None)
-        if not callable(list_managed):
-            warn("sandbox provider 不支持启动容器发现，跳过启动对账")
-            return StartupReconcileResult()
-
         try:
-            discovered = await list_managed()
+            discovered = await self._provider.list_managed()
         except ServiceException:
             raise
         except Exception as exc:

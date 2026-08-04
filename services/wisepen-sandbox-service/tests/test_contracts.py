@@ -117,7 +117,7 @@ async def test_return_ready_requires_token_and_rejects_bound_container() -> None
         await pool.return_ready("warming", "wrong", generation)
     await pool.return_ready("warming", token, generation)
 
-    _, lease = await pool.checkout("req", "user", "session")
+    _, lease = await pool.consume("req", "user", "session")
     record = await repository.get(lease.sandbox_id)
     assert record is not None and record.owner_user_id == "user"
 
