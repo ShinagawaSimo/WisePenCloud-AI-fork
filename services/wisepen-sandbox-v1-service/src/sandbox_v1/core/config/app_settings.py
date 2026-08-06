@@ -14,7 +14,7 @@ from sandbox_v1.core.config.nacos import nacos_client_manager
 
 
 class AppSettings(BaseModel):
-    """Configuration for the container-pool core only."""
+    """Configuration for the sandbox v1 core service."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -31,6 +31,13 @@ class AppSettings(BaseModel):
     SANDBOX_WARMUP_RETRY_BACKOFF_SECONDS: float
     SANDBOX_WARMUP_RETRY_MAX_BACKOFF_SECONDS: float
     SANDBOX_WATCHER_INTERVAL_SECONDS: float
+    SANDBOX_WORKSPACE_ROOT: str = "./data/workspaces"
+    SANDBOX_WORKSPACE_CACHE_ROOT: str = "./data/workspace-cache"
+    SANDBOX_WORKSPACE_SNAPSHOT_TTL_SECONDS: int = 7 * 24 * 60 * 60
+    SANDBOX_WORKSPACE_CACHE_MAX_BYTES: int = 0
+    SANDBOX_WORKSPACE_CACHE_HIGH_WATERMARK_RATIO: float = 0.8
+    SANDBOX_WORKSPACE_CACHE_TARGET_WATERMARK_RATIO: float = 0.7
+    SANDBOX_WORKSPACE_EVICTION_INTERVAL_SECONDS: float = 3600.0
 
     @model_validator(mode="after")
     def validate_runtime_values(self) -> "AppSettings":
@@ -51,16 +58,34 @@ class AppSettings(BaseModel):
             self.SANDBOX_WARMUP_RETRY_BACKOFF_SECONDS,
             self.SANDBOX_WARMUP_RETRY_MAX_BACKOFF_SECONDS,
             self.SANDBOX_WATCHER_INTERVAL_SECONDS,
+            self.SANDBOX_WORKSPACE_SNAPSHOT_TTL_SECONDS,
+            self.SANDBOX_WORKSPACE_EVICTION_INTERVAL_SECONDS,
         )
         if any(value <= 0 for value in positive_values):
             raise ValueError("pool timeouts, limits, and capacities must be positive")
+        if self.SANDBOX_WORKSPACE_CACHE_MAX_BYTES < 0:
+            raise ValueError("workspace cache max bytes cannot be negative")
         if (
             self.SANDBOX_WARMUP_RETRY_MAX_BACKOFF_SECONDS
             < self.SANDBOX_WARMUP_RETRY_BACKOFF_SECONDS
         ):
             raise ValueError("maximum retry backoff cannot be below initial backoff")
+        if not 0 < self.SANDBOX_WORKSPACE_CACHE_HIGH_WATERMARK_RATIO <= 1:
+            raise ValueError("workspace cache high watermark must be in (0, 1]")
+        if not (
+            0 <= self.SANDBOX_WORKSPACE_CACHE_TARGET_WATERMARK_RATIO
+            <= self.SANDBOX_WORKSPACE_CACHE_HIGH_WATERMARK_RATIO
+        ):
+            raise ValueError(
+                "workspace cache target watermark cannot exceed high watermark"
+            )
         if not self.FROM_SOURCE_SECRET.strip() or not self.SANDBOX_IMAGE.strip():
             raise ValueError("source secret and sandbox image are required")
+        if (
+            not self.SANDBOX_WORKSPACE_ROOT.strip()
+            or not self.SANDBOX_WORKSPACE_CACHE_ROOT.strip()
+        ):
+            raise ValueError("workspace root and cache root are required")
         return self
 
 

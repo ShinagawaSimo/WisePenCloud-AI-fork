@@ -11,7 +11,7 @@ from common.web.exception_handlers import setup_global_exception_handlers
 from common.web.middleware import SecurityHeaderMiddleware
 
 from sandbox_v1.api import create_app
-from sandbox_v1.api.endpoints import health, pool
+from sandbox_v1.api.endpoints import health, pool, workspace
 from sandbox_v1.container import container
 from sandbox_v1.core.config.app_settings import settings
 from sandbox_v1.core.config.bootstrap_settings import bootstrap_settings
@@ -25,7 +25,7 @@ setup_observability(
 )
 
 container.config.from_dict(settings.model_dump())
-container.wire(modules=[health, pool])
+container.wire(modules=[health, pool, workspace])
 
 
 def _use_nacos() -> bool:
@@ -41,28 +41,40 @@ async def lifespan(app):
     """Start pool maintenance only when a runtime provider is injected."""
     runtime_provider = None
     watcher_task = None
-
+    workspace_eviction_task = None
+    use_nacos = False
     try:
-        runtime_provider = container.provider()
-    except Exception:
-        # The core service can expose health and metrics before integration
-        # supplies a concrete container runtime provider.
-        info("sandbox runtime provider is not configured; watcher is dormant")
+        workspace_eviction_task = asyncio.create_task(
+            container.workspace_eviction_worker().run()
+        )
 
-    if runtime_provider is not None:
-        await runtime_provider.validate_deployment()
-        await container.startup_reconciler().reconcile()
-        watcher_task = asyncio.create_task(container.watcher().run())
+        try:
+            runtime_provider = container.provider()
+        except Exception:
+            # The core service can expose health and metrics before integration
+            # supplies a concrete container runtime provider.
+            info("sandbox runtime provider is not configured; watcher is dormant")
 
-    use_nacos = _use_nacos()
-    if use_nacos:
-        await nacos_client_manager.register_instance()
+        if runtime_provider is not None:
+            await runtime_provider.validate_deployment()
+            await container.startup_reconciler().reconcile()
+            watcher_task = asyncio.create_task(container.watcher().run())
 
-    app.state.watcher_task = watcher_task
-    info("sandbox pool core started", service=bootstrap_settings.SERVICE_NAME)
-    try:
+        use_nacos = _use_nacos()
+        if use_nacos:
+            await nacos_client_manager.register_instance()
+
+        app.state.watcher_task = watcher_task
+        app.state.workspace_eviction_task = workspace_eviction_task
+        info("sandbox pool core started", service=bootstrap_settings.SERVICE_NAME)
         yield
     finally:
+        if workspace_eviction_task:
+            container.workspace_eviction_worker().stop()
+            workspace_eviction_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await workspace_eviction_task
+
         if watcher_task:
             container.watcher().stop()
             watcher_task.cancel()
