@@ -19,6 +19,8 @@ class AppSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     FROM_SOURCE_SECRET: str
+    MONGODB_URL: str
+    MONGODB_DB_NAME: str
     SANDBOX_IMAGE: str
     SANDBOX_MAX_USER_BINDINGS: int = 20
     SANDBOX_TARGET_READY: int
@@ -81,6 +83,8 @@ class AppSettings(BaseModel):
             )
         if not self.FROM_SOURCE_SECRET.strip() or not self.SANDBOX_IMAGE.strip():
             raise ValueError("source secret and sandbox image are required")
+        if not self.MONGODB_URL.strip() or not self.MONGODB_DB_NAME.strip():
+            raise ValueError("MongoDB url and database name are required")
         if (
             not self.SANDBOX_WORKSPACE_ROOT.strip()
             or not self.SANDBOX_WORKSPACE_CACHE_ROOT.strip()

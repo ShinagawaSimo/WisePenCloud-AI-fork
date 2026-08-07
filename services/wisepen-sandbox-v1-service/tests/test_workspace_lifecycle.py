@@ -8,18 +8,19 @@ import pytest
 from sandbox_v1.application.services.workspace_service import WorkspaceService
 from sandbox_v1.core.observability import MetricsCollector
 from sandbox_v1.core.storage.filesystem import LocalWorkspaceSnapshotCache
-from sandbox_v1.core.storage.memory import MemoryWorkspaceRepository
+from sandbox_v1.core.storage.mongo import MongoWorkspaceRepository
 from sandbox_v1.domain.entities import (
     WorkspaceEvictionReason,
     WorkspaceLifecycleStatus,
     WorkspaceRestoreOutcome,
     WorkspaceSnapshotRef,
 )
+from fake_mongo import FakeDatabase
 
 
 def _service(tmp_path: Path) -> WorkspaceService:
     return WorkspaceService(
-        repository=MemoryWorkspaceRepository(),
+        repository=MongoWorkspaceRepository(database=FakeDatabase()),
         cache=LocalWorkspaceSnapshotCache(cache_root=tmp_path / "cache"),
         workspace_root=tmp_path / "workspaces",
         metrics=MetricsCollector(),
@@ -126,7 +127,7 @@ class SlowRestoreCache:
 async def test_concurrent_rebuild_returns_workspace_restoring(tmp_path: Path) -> None:
     cache = SlowRestoreCache()
     service = WorkspaceService(
-        repository=MemoryWorkspaceRepository(),
+        repository=MongoWorkspaceRepository(database=FakeDatabase()),
         cache=cache,
         workspace_root=tmp_path / "workspaces",
         metrics=MetricsCollector(),

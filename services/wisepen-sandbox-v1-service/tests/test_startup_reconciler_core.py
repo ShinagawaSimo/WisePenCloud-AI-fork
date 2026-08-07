@@ -7,7 +7,7 @@ import pytest
 from sandbox_v1.application.services.sandbox_startup_reconciler import (
     SandboxStartupReconciler,
 )
-from sandbox_v1.core.storage.memory import MemorySandboxRepository
+from sandbox_v1.core.storage.mongo import MongoSandboxRepository
 from sandbox_v1.domain.entities import (
     DiscoveredSandbox,
     Endpoint,
@@ -16,6 +16,7 @@ from sandbox_v1.domain.entities import (
     SandboxRef,
     SandboxState,
 )
+from fake_mongo import FakeDatabase
 
 
 @dataclass
@@ -43,7 +44,8 @@ def _ref(sandbox_id: str) -> SandboxRef:
 
 @pytest.mark.asyncio
 async def test_startup_reconciler_keeps_healthy_authoritative_ready() -> None:
-    repository = MemorySandboxRepository()
+    repository = MongoSandboxRepository(database=FakeDatabase())
+    await repository.initialize()
     await repository.save(SandboxRecord(ref=_ref("ready-a"), state=SandboxState.READY))
     provider = FakeProvider([DiscoveredSandbox(ref=_ref("ready-a"), running=True)])
 
@@ -55,7 +57,8 @@ async def test_startup_reconciler_keeps_healthy_authoritative_ready() -> None:
 
 @pytest.mark.asyncio
 async def test_startup_reconciler_destroys_orphan_container() -> None:
-    repository = MemorySandboxRepository()
+    repository = MongoSandboxRepository(database=FakeDatabase())
+    await repository.initialize()
     provider = FakeProvider([DiscoveredSandbox(ref=_ref("orphan-a"), running=True)])
 
     result = await SandboxStartupReconciler(repository, provider).reconcile()

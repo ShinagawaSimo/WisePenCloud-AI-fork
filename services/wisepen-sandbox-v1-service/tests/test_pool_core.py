@@ -6,7 +6,7 @@ from sandbox_v1.application.services.sandbox_pool import (
     PoolMaintenancePlan,
     SandboxPool,
 )
-from sandbox_v1.core.storage.memory import MemorySandboxRepository
+from sandbox_v1.core.storage.mongo import MongoSandboxRepository
 from sandbox_v1.domain.entities import (
     Endpoint,
     PoolSnapshot,
@@ -14,6 +14,7 @@ from sandbox_v1.domain.entities import (
     SandboxRef,
     SandboxState,
 )
+from fake_mongo import FakeDatabase
 
 
 def test_maintenance_plan_counts_inflight_supply() -> None:
@@ -42,7 +43,8 @@ def test_maintenance_plan_counts_inflight_supply() -> None:
 
 @pytest.mark.asyncio
 async def test_consume_ready_assigns_and_reuses_user_binding() -> None:
-    repository = MemorySandboxRepository()
+    repository = MongoSandboxRepository(database=FakeDatabase())
+    await repository.initialize()
     pool = SandboxPool(repository, min_ready=1, target_ready=1)
     record = SandboxRecord(
         ref=SandboxRef(
