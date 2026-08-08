@@ -5,6 +5,7 @@ from sandbox_v1.api.schemas.health import (
     ReadinessResponse,
 )
 from sandbox_v1.api.schemas.pool import PoolMetricsResponse
+from sandbox_v1.api.schemas.sandbox import SandboxRecycleResponse
 from sandbox_v1.api.schemas.workspace import WorkspaceLifecycleResponse
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "ReadinessErrorDetail",
     "ReadinessErrorResponse",
     "ReadinessResponse",
+    "SandboxRecycleResponse",
     "WorkspaceLifecycleResponse",
 ]

@@ -15,6 +15,7 @@ _POOL_AUTHORITY_STATES = (
     SandboxState.CREATING,
     SandboxState.WARMING,
     SandboxState.READY,
+    SandboxState.RETIRING,
     SandboxState.DESTROYING,
 )
 
@@ -105,6 +106,10 @@ class SandboxStartupReconciler:
             await self._destroy_and_mark(record, item, "startup_destroying")
             return self._replace(result, destroying_finished=result.destroying_finished + 1)
 
+        if record.state == SandboxState.RETIRING:
+            await self._destroy_and_mark(record, item, "startup_retiring")
+            return self._replace(result, destroying_finished=result.destroying_finished + 1)
+
         if record.state in (SandboxState.CREATING, SandboxState.WARMING):
             # 重启后旧 readiness 回调不再可信；销毁 in-flight 容器防止旧 generation 回写。
             await self._destroy_and_mark(record, item, "startup_inflight")
@@ -146,6 +151,7 @@ class SandboxStartupReconciler:
                 SandboxState.DESTROYED,
                 error="container missing during startup reconcile",
             )
+            await self._repository.clear_binding_for_sandbox(record.ref.sandbox_id)
             self._metrics.increment("startup_destroying_compensated")
             return self._replace(result, destroying_finished=result.destroying_finished + 1)
 
@@ -156,6 +162,7 @@ class SandboxStartupReconciler:
             SandboxState.LOST,
             error="container missing during startup reconcile",
         )
+        await self._repository.clear_binding_for_sandbox(record.ref.sandbox_id)
         self._metrics.increment("startup_missing_lost")
         return self._replace(result, missing_marked_lost=result.missing_marked_lost + 1)
 
@@ -215,6 +222,7 @@ class SandboxStartupReconciler:
             SandboxState.DESTROYED,
             error=reason,
         )
+        await self._repository.clear_binding_for_sandbox(record.ref.sandbox_id)
         self._metrics.increment("startup_destroy_successes")
 
     async def _transition_to_destroying(

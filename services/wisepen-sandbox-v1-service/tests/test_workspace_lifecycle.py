@@ -122,6 +122,9 @@ class SlowRestoreCache:
     ) -> WorkspaceSnapshotRef:
         return snapshot
 
+    async def purge_workspace(self, workspace_key: str) -> None:
+        return None
+
 
 @pytest.mark.asyncio
 async def test_concurrent_rebuild_returns_workspace_restoring(tmp_path: Path) -> None:

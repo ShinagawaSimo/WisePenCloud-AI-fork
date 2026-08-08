@@ -175,6 +175,7 @@ def workspace_record_to_doc(record: WorkspaceRecord) -> dict[str, Any]:
         "deleted_at": record.deleted_at,
         "restore_started_at": record.restore_started_at,
         "restored_at": record.restored_at,
+        "permanently_deleted_at": record.permanently_deleted_at,
         "last_error": record.last_error,
     }
 
@@ -195,5 +196,6 @@ def workspace_record_from_doc(doc: dict[str, Any]) -> WorkspaceRecord:
         deleted_at=_optional_datetime(doc.get("deleted_at")),
         restore_started_at=_optional_datetime(doc.get("restore_started_at")),
         restored_at=_optional_datetime(doc.get("restored_at")),
+        permanently_deleted_at=_optional_datetime(doc.get("permanently_deleted_at")),
         last_error=doc.get("last_error"),
     )

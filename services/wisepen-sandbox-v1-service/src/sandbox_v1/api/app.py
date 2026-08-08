@@ -9,7 +9,7 @@ from common.core.exceptions import ServiceException
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from sandbox_v1.api.endpoints import health, pool, workspace
+from sandbox_v1.api.endpoints import health, pool, sandbox, workspace
 
 
 def create_app(
@@ -29,6 +29,8 @@ def create_app(
         openapi_tags=[
             {"name": "health", "description": "进程存活与沙箱池就绪探针。"},
             {"name": "pool", "description": "预热池容量与运行指标接口。"},
+            {"name": "sandbox", "description": "用户容器生命周期控制接口。"},
+            {"name": "workspace", "description": "Workspace 删除与重建控制接口。"},
         ],
         lifespan=lifespan,
     )
@@ -43,5 +45,6 @@ def create_app(
 
     app.include_router(health.router)
     app.include_router(pool.router)
+    app.include_router(sandbox.router)
     app.include_router(workspace.router)
     return app

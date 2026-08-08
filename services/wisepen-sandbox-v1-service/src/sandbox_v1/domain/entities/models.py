@@ -32,17 +32,23 @@ class WorkspaceLifecycleStatus(StrEnum):
     WORKSPACE_READY = "workspace_ready"
     WORKSPACE_DELETED = "workspace_deleted"
     WORKSPACE_RESTORING = "workspace_restoring"
+    DELETED = "deleted"
 
 
 class WorkspaceRestoreStartStatus(StrEnum):
     STARTED = "started"
     ALREADY_ACTIVE = "already_active"
     RESTORING = "restoring"
+    PERMANENTLY_DELETED = "permanently_deleted"
 
 
 class WorkspaceEvictionReason(StrEnum):
     TTL = "ttl"
     LRU = "lru"
+
+
+class SandboxRecycleStatus(StrEnum):
+    RECYCLING = "recycling"
 
 
 @dataclass(frozen=True)
@@ -151,6 +157,7 @@ class WorkspaceRecord:
     deleted_at: datetime | None = None
     restore_started_at: datetime | None = None
     restored_at: datetime | None = None
+    permanently_deleted_at: datetime | None = None
     last_error: str | None = None
 
 
@@ -182,6 +189,15 @@ class WorkspaceLifecycleResult:
     snapshot_id: str | None = None
     restored_from_snapshot: bool = False
     unrecoverable_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class SandboxRecycleResult:
+    user_id: str
+    session_id: str
+    status: SandboxRecycleStatus
+    sandbox_id: str | None = None
+    snapshot_id: str | None = None
 
 
 @dataclass(frozen=True)

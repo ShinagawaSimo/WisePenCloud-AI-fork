@@ -198,6 +198,10 @@ class Watcher:
             SandboxState.DESTROYING, destroy_cutoff
         ):
             await self._destroy_stale(record, "destroy_timeout_retry")
+        for record in await self._repository.records_older_than(
+            SandboxState.RETIRING, destroy_cutoff
+        ):
+            await self._destroy_stale(record, "retiring_timeout_retry")
 
     async def _destroy_stale(self, record: SandboxRecord, reason: str) -> None:
         """Best-effort stale cleanup; LOST preserves evidence of failure."""
@@ -222,6 +226,7 @@ class Watcher:
                     SandboxState.DESTROYED,
                     error=reason,
                 )
+                await self._repository.clear_binding_for_sandbox(record.ref.sandbox_id)
         except (Exception, ServiceException) as exc:
             self._metrics.increment("destroy_failures")
             error(

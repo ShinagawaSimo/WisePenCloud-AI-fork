@@ -107,6 +107,9 @@ class LocalWorkspaceSnapshotCache:
             reason,
         )
 
+    async def purge_workspace(self, workspace_key: str) -> None:
+        return await asyncio.to_thread(self._purge_workspace_sync, workspace_key)
+
     def _snapshot_sync(
         self,
         workspace_key: str,
@@ -358,6 +361,20 @@ class LocalWorkspaceSnapshotCache:
         self._write_metadata(snapshot_dir / "metadata.json", updated)
         shutil.rmtree(snapshot_dir / "files", ignore_errors=True)
         return ref
+
+    def _purge_workspace_sync(self, workspace_key: str) -> None:
+        self._validate_component(workspace_key, "workspace_key")
+        shutil.rmtree(self._snapshot_root / workspace_key, ignore_errors=True)
+
+        # Snapshot publication uses tmp directories prefixed by workspace_key.
+        # Permanent delete removes those partial generations too so a later
+        # Chat-created session cannot observe stale cache debris.
+        if self._tmp_root.exists():
+            for tmp_path in self._tmp_root.glob(f"{workspace_key}_*"):
+                if tmp_path.is_dir() and not tmp_path.is_symlink():
+                    shutil.rmtree(tmp_path, ignore_errors=True)
+                else:
+                    tmp_path.unlink(missing_ok=True)
 
     def _iter_metadata(self) -> list[_SnapshotMetadata]:
         if not self._snapshot_root.exists():

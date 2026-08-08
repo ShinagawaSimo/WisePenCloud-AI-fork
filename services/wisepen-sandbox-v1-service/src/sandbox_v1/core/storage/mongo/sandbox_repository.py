@@ -244,8 +244,100 @@ class MongoSandboxRepository:
         )
         return [sandbox_record_from_doc(doc) async for doc in cursor]
 
+    async def begin_user_recycle(
+        self,
+        user_id: str,
+        *,
+        reason: str,
+    ) -> SandboxRecord | None:
+        binding = await self._bindings.find_one({"user_id": user_id})
+        if binding is None:
+            return None
+
+        record_doc = await self._sandboxes.find_one(
+            {"sandbox_id": binding["sandbox_id"]}
+        )
+        if record_doc is None:
+            await self.clear_user_binding(user_id, binding["sandbox_id"])
+            return None
+
+        state = SandboxState(record_doc["state"])
+        if state in {SandboxState.RETIRING, SandboxState.DESTROYING}:
+            return sandbox_record_from_doc(record_doc)
+        if state in {SandboxState.DESTROYED, SandboxState.LOST}:
+            await self.clear_user_binding(user_id, binding["sandbox_id"])
+            return None
+        if state != SandboxState.USER_ACTIVE:
+            raise ServiceException(
+                SandboxErrorCode.INVALID_STATE_TRANSITION,
+                f"cannot recycle sandbox in {state.value}",
+            )
+
+        now = utc_now()
+        updated = await self._sandboxes.find_one_and_update(
+            {
+                "sandbox_id": binding["sandbox_id"],
+                "state": SandboxState.USER_ACTIVE.value,
+                "owner_user_id": user_id,
+            },
+            {
+                "$set": {
+                    "state": SandboxState.RETIRING.value,
+                    "updated_at": now,
+                    "last_error": reason,
+                },
+                "$inc": {"state_version": 1},
+            },
+            return_document=True,
+        )
+        if updated is None:
+            current = await self._sandboxes.find_one(
+                {"sandbox_id": binding["sandbox_id"]}
+            )
+            if current is not None and current.get("state") in {
+                SandboxState.RETIRING.value,
+                SandboxState.DESTROYING.value,
+            }:
+                return sandbox_record_from_doc(current)
+            raise ServiceException(
+                SandboxErrorCode.SANDBOX_UNAVAILABLE,
+                "user container is not available for recycle",
+            )
+
+        self._metrics.increment("user_container_recycle_started")
+        await self._inc_generation()
+        return sandbox_record_from_doc(updated)
+
+    async def clear_user_binding(self, user_id: str, sandbox_id: str) -> None:
+        await self._bindings.delete_one(
+            {"user_id": user_id, "sandbox_id": sandbox_id}
+        )
+        await self._inc_generation()
+
+    async def clear_binding_for_sandbox(self, sandbox_id: str) -> None:
+        await self._bindings.delete_one({"sandbox_id": sandbox_id})
+        await self._inc_generation()
+
     async def _reuse_binding(self, binding: dict[str, Any]) -> SandboxRecord:
         now = utc_now()
+        current = await self._sandboxes.find_one({"sandbox_id": binding["sandbox_id"]})
+        if current is None:
+            raise ServiceException(
+                SandboxErrorCode.SANDBOX_UNAVAILABLE,
+                "user container is not available",
+            )
+        state = SandboxState(current["state"])
+        if state in {SandboxState.RETIRING, SandboxState.DESTROYING}:
+            raise ServiceException(
+                SandboxErrorCode.SANDBOX_RECYCLING,
+                "sandbox_recycling",
+            )
+        if state != SandboxState.USER_ACTIVE:
+            raise ServiceException(
+                SandboxErrorCode.SANDBOX_UNAVAILABLE,
+                "user container is not available",
+            )
+
         updated_binding = await self._bindings.find_one_and_update(
             {"user_id": binding["user_id"]},
             {

@@ -52,6 +52,14 @@ class WorkspaceService:
         workspace_key = self.workspace_key(user_id, session_id)
         workspace_path = self._workspace_path(workspace_key)
         existing = await self._repository.get(user_id, session_id)
+        if existing is not None and existing.permanently_deleted_at is not None:
+            return self._result(
+                user_id,
+                session_id,
+                WorkspaceLifecycleStatus.DELETED,
+                existing.workspace_path,
+                None,
+            )
         if existing is not None and existing.state == WorkspaceState.DELETED:
             return self._result(
                 user_id,
@@ -75,6 +83,14 @@ class WorkspaceService:
             workspace_key=workspace_key,
             workspace_path=str(workspace_path),
         )
+        if record.permanently_deleted_at is not None:
+            return self._result(
+                user_id,
+                session_id,
+                WorkspaceLifecycleStatus.DELETED,
+                record.workspace_path,
+                None,
+            )
         if record.state == WorkspaceState.DELETED:
             return self._result(
                 user_id,
@@ -141,6 +157,14 @@ class WorkspaceService:
             workspace_key=workspace_key,
             workspace_path=str(workspace_path),
         )
+        if record.permanently_deleted_at is not None:
+            return self._result(
+                user_id,
+                session_id,
+                WorkspaceLifecycleStatus.DELETED,
+                record.workspace_path,
+                None,
+            )
         if record.state == WorkspaceState.DELETED:
             return self._result(
                 user_id,
@@ -220,6 +244,14 @@ class WorkspaceService:
                 start.record.workspace_path,
                 start.record.tombstone_snapshot,
             )
+        if start.status == WorkspaceRestoreStartStatus.PERMANENTLY_DELETED:
+            return self._result(
+                user_id,
+                session_id,
+                WorkspaceLifecycleStatus.DELETED,
+                start.record.workspace_path,
+                None,
+            )
         if start.status == WorkspaceRestoreStartStatus.ALREADY_ACTIVE:
             await asyncio.to_thread(self._ensure_workspace_dir, workspace_path)
             return self._result(
@@ -263,6 +295,42 @@ class WorkspaceService:
             record.tombstone_snapshot,
             restored_from_snapshot=outcome.restored_from_snapshot,
             unrecoverable_reason=outcome.unrecoverable_reason,
+        )
+
+    async def permanent_delete(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+    ) -> WorkspaceLifecycleResult:
+        user_id, session_id = self._validate_ids(user_id, session_id)
+        workspace_key = self.workspace_key(user_id, session_id)
+        workspace_path = self._workspace_path(workspace_key)
+        existing = await self._repository.get(user_id, session_id)
+        if existing is not None and existing.permanently_deleted_at is not None:
+            return self._result(
+                user_id,
+                session_id,
+                WorkspaceLifecycleStatus.DELETED,
+                existing.workspace_path,
+                None,
+            )
+
+        await asyncio.to_thread(self._delete_workspace_dir, workspace_path)
+        await self._cache.purge_workspace(workspace_key)
+        record = await self._repository.finish_permanent_delete(
+            user_id=user_id,
+            session_id=session_id,
+            workspace_key=workspace_key,
+            workspace_path=str(workspace_path),
+        )
+        self._metrics.increment("workspace_permanent_deletes")
+        return self._result(
+            user_id,
+            session_id,
+            WorkspaceLifecycleStatus.DELETED,
+            record.workspace_path,
+            None,
         )
 
     async def evict_snapshots(self) -> list[WorkspaceSnapshotRef]:

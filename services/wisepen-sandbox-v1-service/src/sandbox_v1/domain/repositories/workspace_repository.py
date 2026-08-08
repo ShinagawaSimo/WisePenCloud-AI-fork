@@ -44,6 +44,16 @@ class WorkspaceRepository(Protocol):
     ) -> WorkspaceRecord:
         ...
 
+    async def finish_permanent_delete(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        workspace_key: str,
+        workspace_path: str,
+    ) -> WorkspaceRecord:
+        ...
+
     async def remember_snapshot(
         self,
         *,

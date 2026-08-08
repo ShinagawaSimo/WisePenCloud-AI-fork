@@ -59,6 +59,13 @@ class FakeCollection:
                 self._apply_update(doc, update)
         return None
 
+    async def delete_one(self, query):
+        for key, doc in list(self.docs.items()):
+            if self._matches(doc, query):
+                del self.docs[key]
+                break
+        return None
+
     async def find_one(self, query):
         result = self._first(query)
         return copy.deepcopy(result) if result is not None else None

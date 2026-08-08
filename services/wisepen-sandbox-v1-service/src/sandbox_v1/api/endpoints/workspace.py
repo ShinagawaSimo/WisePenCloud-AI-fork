@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from common.core.domain import R
 from sandbox_v1.api.schemas import WorkspaceLifecycleResponse
+from sandbox_v1.application.services.sandbox_lifecycle import SandboxLifecycleService
 from sandbox_v1.application.services.workspace_service import WorkspaceService
 from sandbox_v1.container import Container
 
@@ -54,6 +55,33 @@ async def rebuild(
     workspace_service: WorkspaceService = Depends(Provide[Container.workspace_service]),
 ) -> R[WorkspaceLifecycleResponse]:
     result = await workspace_service.rebuild(
+        user_id=user_id,
+        session_id=session_id,
+    )
+    return R.success(data=WorkspaceLifecycleResponse.from_result(result))
+
+
+@router.post(
+    "/{user_id}/{session_id}/permanent-delete",
+    response_model=R[WorkspaceLifecycleResponse],
+    status_code=200,
+    summary="Permanently delete a Workspace session",
+    description="""
+Chat-only control operation. The service destroys the current user container
+when present, removes the managed Workspace directory and all host-side cache
+for this session, clears the tombstone, and returns deleted. Sandbox does not
+create a replacement session; Chat must create a new session after deleted.
+""",
+)
+@inject
+async def permanent_delete(
+    user_id: str,
+    session_id: str,
+    lifecycle_service: SandboxLifecycleService = Depends(
+        Provide[Container.sandbox_lifecycle_service]
+    ),
+) -> R[WorkspaceLifecycleResponse]:
+    result = await lifecycle_service.permanent_delete(
         user_id=user_id,
         session_id=session_id,
     )

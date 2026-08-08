@@ -47,6 +47,10 @@ class MongoWorkspaceRepository:
             ],
             name="idx_tombstone_snapshot",
         )
+        await self._workspaces.create_index(
+            [("permanently_deleted_at", 1)],
+            name="idx_permanently_deleted_at",
+        )
 
     async def get(self, user_id: str, session_id: str) -> WorkspaceRecord | None:
         doc = await self._workspaces.find_one(
@@ -80,6 +84,8 @@ class MongoWorkspaceRepository:
             return record
 
         record = workspace_record_from_doc(doc)
+        if record.permanently_deleted_at is not None:
+            return record
         if record.state == WorkspaceState.DELETED:
             return record
 
@@ -128,6 +134,8 @@ class MongoWorkspaceRepository:
             return record
 
         record = workspace_record_from_doc(doc)
+        if record.permanently_deleted_at is not None:
+            return record
         if record.state in {WorkspaceState.DELETED, WorkspaceState.RESTORING}:
             return record
 
@@ -141,6 +149,59 @@ class MongoWorkspaceRepository:
                     "last_error": None,
                 },
                 "$inc": {"state_version": 1},
+            },
+            return_document=True,
+        )
+        return workspace_record_from_doc(updated)
+
+    async def finish_permanent_delete(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        workspace_key: str,
+        workspace_path: str,
+    ) -> WorkspaceRecord:
+        now = utc_now()
+        doc = await self._workspaces.find_one(
+            {"user_id": user_id, "session_id": session_id}
+        )
+        if doc is None:
+            record = self._new_record(
+                user_id=user_id,
+                session_id=session_id,
+                workspace_key=workspace_key,
+                workspace_path=workspace_path,
+                state=WorkspaceState.DELETED,
+            )
+            record.deleted_at = now
+            record.permanently_deleted_at = now
+            record.state_version = 1
+            await self._workspaces.update_one(
+                {"_id": workspace_key},
+                {"$setOnInsert": workspace_record_to_doc(record)},
+                upsert=True,
+            )
+            return record
+
+        # Logical deletion keeps a recoverable tombstone. Permanent deletion
+        # deliberately clears that pointer while retaining a terminal record so
+        # repeated calls with the same session_id keep returning deleted.
+        updated = await self._workspaces.find_one_and_update(
+            {"user_id": user_id, "session_id": session_id},
+            {
+                "$set": {
+                    "state": WorkspaceState.DELETED.value,
+                    "workspace_path": workspace_path,
+                    "tombstone_snapshot": None,
+                    "deleted_at": now,
+                    "permanently_deleted_at": now,
+                    "restore_started_at": None,
+                    "restored_at": None,
+                    "updated_at": now,
+                    "last_error": None,
+                },
+                "$inc": {"generation": 1, "state_version": 1},
             },
             return_document=True,
         )
@@ -245,6 +306,11 @@ class MongoWorkspaceRepository:
             )
 
         record = workspace_record_from_doc(doc)
+        if record.permanently_deleted_at is not None:
+            return WorkspaceRestoreStart(
+                status=WorkspaceRestoreStartStatus.PERMANENTLY_DELETED,
+                record=record,
+            )
         if record.state == WorkspaceState.RESTORING:
             return WorkspaceRestoreStart(
                 status=WorkspaceRestoreStartStatus.RESTORING,

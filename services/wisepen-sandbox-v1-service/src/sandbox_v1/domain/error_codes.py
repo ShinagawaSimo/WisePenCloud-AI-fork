@@ -9,6 +9,7 @@ class SandboxErrorCode(IErrorCode):
     INVALID_STATE_TRANSITION = (46006, "invalid sandbox state transition")
     SANDBOX_UNAVAILABLE = (46009, "sandbox service is temporarily unavailable")
     USER_SANDBOX_CAPACITY = (46014, "user sandbox capacity has been reached")
+    SANDBOX_RECYCLING = (46015, "sandbox_recycling")
     INVALID_WORKSPACE_REQUEST = (46101, "workspace request identifiers are required")
     WORKSPACE_SNAPSHOT_REJECTED = (
         46102,

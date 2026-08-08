@@ -43,3 +43,6 @@ class WorkspaceCache(Protocol):
         reason: WorkspaceEvictionReason,
     ) -> WorkspaceSnapshotRef:
         ...
+
+    async def purge_workspace(self, workspace_key: str) -> None:
+        ...

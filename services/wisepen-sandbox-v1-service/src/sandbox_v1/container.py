@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from sandbox_v1.application.services.sandbox_lifecycle import SandboxLifecycleService
 from sandbox_v1.application.services.sandbox_pool import SandboxPool
 from sandbox_v1.application.services.sandbox_startup_reconciler import (
     SandboxStartupReconciler,
@@ -94,6 +95,14 @@ class Container(containers.DeclarativeContainer):
         SandboxStartupReconciler,
         repository=repository,
         provider=provider,
+    )
+    sandbox_lifecycle_service = providers.Singleton(
+        SandboxLifecycleService,
+        repository=repository,
+        provider=provider,
+        workspace_service=workspace_service,
+        destroy_timeout_seconds=config.SANDBOX_DESTROY_TIMEOUT_SECONDS,
+        metrics=metrics,
     )
     watcher = providers.Singleton(
         Watcher,
