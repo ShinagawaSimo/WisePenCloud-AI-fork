@@ -51,13 +51,15 @@ class MongoSandboxRepository(SandboxRepository):
     ) -> SandboxDocument | None:
         return await SandboxDocument.find_one(
             SandboxDocument.bind_user_id == user_id,
+            SandboxDocument.state == SandboxState.USER_ACTIVE,
         )
 
     async def assign_to_user(
             self,
             user_id: str,
     ) -> SandboxDocument:
-        sandbox = SandboxDocument.find_one(
+        now = datetime.now(timezone.utc)
+        sandbox = await SandboxDocument.find_one(
             {
                 "state": SandboxState.READY,
                 "bind_user_id": None,
@@ -68,6 +70,8 @@ class MongoSandboxRepository(SandboxRepository):
                 "$set": {
                     "state": SandboxState.USER_ACTIVE,
                     "bind_user_id": user_id,
+                    "bind_at": now,
+                    "updated_at": now,
                 }
             },
             response_type=UpdateResponse.NEW_DOCUMENT,
@@ -82,7 +86,7 @@ class MongoSandboxRepository(SandboxRepository):
         sandbox_id: str,
         state: SandboxState,
     ) -> SandboxDocument | None:
-        return SandboxDocument.find_one(
+        return await SandboxDocument.find_one(
             SandboxDocument.sandbox_id == sandbox_id,
         ).update(
             {

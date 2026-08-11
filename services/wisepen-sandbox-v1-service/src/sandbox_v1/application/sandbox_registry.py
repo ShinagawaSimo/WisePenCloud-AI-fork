@@ -23,7 +23,6 @@ class SandboxSpecInfo(BaseModel):
 
 class SandboxProviderInfo(BaseModel):
     start_spec: SandboxSpecInfo
-    container_ip: str | None = None
     endpoint: SandboxEndpointRef | None = None
 
 
@@ -58,6 +57,7 @@ class SandboxRegistry:
     async def register_container(
         self,
         container_id: str,
+        container_ip: str,
         sandbox_provider_info: SandboxProviderInfo,
         *,
         provider_id: str | None = None,
@@ -68,12 +68,9 @@ class SandboxRegistry:
 
             resolved_provider_id = settings.SANDBOX_PROVIDER_ID
 
-        if not sandbox_provider_info.container_ip:
-            raise ValueError("sandbox provider info missing container_ip")
-
         sandbox = SandboxDocument.create_warming(
             container_id=container_id,
-            container_ip=sandbox_provider_info.container_ip,
+            container_ip=container_ip,
             provider_id=resolved_provider_id,
             endpoint=sandbox_provider_info.endpoint if sandbox_provider_info.endpoint is not None else self._endpoint,
             metadata=sandbox_provider_info.start_spec.metadata,

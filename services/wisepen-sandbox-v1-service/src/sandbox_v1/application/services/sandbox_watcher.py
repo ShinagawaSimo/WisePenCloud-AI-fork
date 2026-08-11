@@ -92,12 +92,10 @@ class Watcher:
             try:
                 container_id = await self._container_manager.create(sandbox_provider_info.start_spec.image)
                 container_ip = await self._container_manager.get_container_ip(container_id)
-                sandbox_provider_info_with_ip = sandbox_provider_info.model_copy(
-                    update={"container_ip": container_ip}
-                )
                 await self._sandbox_registry.register_container(
                     container_id=container_id,
-                    sandbox_provider_info=sandbox_provider_info_with_ip,
+                    container_ip=container_ip,
+                    sandbox_provider_info=sandbox_provider_info,
                     provider_id=settings.SANDBOX_PROVIDER_ID,
                 )
                 created += 1
