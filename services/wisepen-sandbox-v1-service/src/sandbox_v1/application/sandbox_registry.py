@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from sandbox_v1.domain.entities import SandboxDocument, SandboxEndpointRef, SandboxState
+from sandbox_v1.domain.entities import SandboxDocument, SandboxEndpointRef
 from sandbox_v1.domain.repositories import SandboxRepository
 
 if TYPE_CHECKING:
@@ -72,14 +71,12 @@ class SandboxRegistry:
         if not sandbox_provider_info.container_ip:
             raise ValueError("sandbox provider info missing container_ip")
 
-        now = datetime.now(timezone.utc)
-        sandbox = SandboxDocument(
+        sandbox = SandboxDocument.create_warming(
             container_id=container_id,
             container_ip=sandbox_provider_info.container_ip,
             provider_id=resolved_provider_id,
             endpoint=sandbox_provider_info.endpoint if sandbox_provider_info.endpoint is not None else self._endpoint,
-            state=SandboxState.WARMING,
-            updated_at=now,
+            metadata=sandbox_provider_info.start_spec.metadata,
         )
         await self._sandbox_repository.save(sandbox)
         return sandbox

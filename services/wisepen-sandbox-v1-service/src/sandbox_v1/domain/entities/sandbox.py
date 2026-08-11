@@ -7,6 +7,11 @@ from beanie import Document
 from pydantic import BaseModel, Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class SandboxState(StrEnum):
     """沙箱生命周期状态。"""
 
@@ -22,6 +27,7 @@ class SandboxState(StrEnum):
 class SandboxEndpointRef(BaseModel):
     """沙箱对服务内部暴露的访问入口"""
 
+    container_ip: str | None = None
     base_url: str = Field(..., description="沙箱内服务基地址")
     token: str | None = Field(default=None, description="访问令牌")
 
@@ -38,11 +44,41 @@ class SandboxDocument(Document):
     metadata: dict[str, Any] = Field(default_factory=dict, description="沙箱附加元数据")
 
     state: SandboxState = Field(..., description="沙箱当前生命周期状态")
-    created_at: datetime = Field(default=datetime.now(timezone.utc), description="沙箱创建时间")
-    updated_at: datetime = Field(default=datetime.now(timezone.utc), description="沙箱记录更新时间")
+    created_at: datetime = Field(default_factory=_utc_now, description="沙箱创建时间")
+    updated_at: datetime = Field(default_factory=_utc_now, description="沙箱记录更新时间")
     bind_user_id: str | None = Field(default=None, description="当前绑定的用户 ID")
-    bind_at: datetime = Field(default=datetime.now(timezone.utc), description="绑定发生时间")
+    bind_at: datetime | None = Field(default=None, description="绑定发生时间")
     last_error: str | None = Field(default=None, description="最近一次错误信息")
+
+    @classmethod
+    def create_warming(
+        cls,
+        *,
+        container_id: str,
+        container_ip: str,
+        provider_id: str,
+        endpoint: SandboxEndpointRef | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> "SandboxDocument":
+        now = _utc_now()
+        return cls(
+            container_id=container_id,
+            container_ip=container_ip,
+            provider_id=provider_id,
+            endpoint=endpoint,
+            metadata=dict(metadata or {}),
+            state=SandboxState.WARMING,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def transition_to(self, state: SandboxState, *, last_error: str | None = None) -> None:
+        if state != self.state and not can_transition(self.state, state):
+            raise ValueError(f"invalid sandbox state transition: {self.state} -> {state}")
+
+        self.state = state
+        self.updated_at = _utc_now()
+        self.last_error = last_error
 
     class Settings:
         name = "wisepen_sandbox_v1_sandbox"
@@ -51,7 +87,7 @@ class SandboxDocument(Document):
             IndexModel([("provider_id", ASCENDING)], name="idx_provider_id"),
             IndexModel([("state", ASCENDING), ("updated_at", ASCENDING)], name="idx_state_updated_at"),
             IndexModel(
-                [("owner_user_id", ASCENDING), ("state", ASCENDING), ("updated_at", DESCENDING)],
+                [("bind_user_id", ASCENDING), ("state", ASCENDING), ("updated_at", DESCENDING)],
                 name="idx_owner_state_updated",
             ),
         ]
