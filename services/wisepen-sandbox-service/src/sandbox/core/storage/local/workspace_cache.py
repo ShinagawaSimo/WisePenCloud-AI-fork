@@ -32,6 +32,20 @@ class LocalWorkspaceCache:
             raise ServiceException(SandboxErrorCode.WORKSPACE_PATH_INVALID, "workspace id is invalid")
         return self._root / workspace_id
 
+    def has_valid_bundle(self, bundle: WorkspaceExportBundleRef) -> bool:
+        """校验导出引用指向本组件管理的、非链接缓存目录。"""
+        try:
+            expected = self.cache_path(bundle.workspace_id).resolve()
+            actual = Path(bundle.bundle_path or "").expanduser()
+            return (
+                not actual.is_symlink()
+                and actual.resolve() == expected
+                and actual.is_dir()
+                and actual.parent == self._root
+            )
+        except (OSError, RuntimeError, ServiceException):
+            return False
+
     async def create_staging_directory(self, workspace_id: str) -> Path:
         """在缓存根目录内创建独占 staging 目录，供容器导出写入。"""
         def create_staging() -> Path:

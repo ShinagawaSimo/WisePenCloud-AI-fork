@@ -60,10 +60,14 @@ class MongoWorkspaceRepository(WorkspaceRepository):
         workspace_id: str,
         sandbox_id: str,
         workspace_path: str,
+        expected_state: WorkspaceState | None = None,
     ) -> SessionWorkspaceDocument | None:
         now = datetime.now(timezone.utc)
+        filters: dict[str, object] = {"id": workspace_id}
+        if expected_state is not None:
+            filters["state"] = expected_state
         return await SessionWorkspaceDocument.find_one(
-            SessionWorkspaceDocument.id == workspace_id,
+            filters,
         ).update(
             {
                 "$set": {

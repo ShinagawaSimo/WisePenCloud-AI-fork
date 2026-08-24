@@ -45,8 +45,9 @@ class WorkspaceRepository(Protocol):
         workspace_id: str,
         sandbox_id: str,
         workspace_path: str,
+        expected_state: WorkspaceState | None = None,
     ) -> SessionWorkspaceDocument | None:
-        """写入运行时沙箱关联和容器内工作区路径。"""
+        """写入运行时关联；可用 expected_state 防止旧恢复任务覆盖新状态。"""
         ...
 
     async def list_idle_attached(

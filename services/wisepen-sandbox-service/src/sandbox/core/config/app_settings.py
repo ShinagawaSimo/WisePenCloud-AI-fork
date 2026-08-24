@@ -58,6 +58,8 @@ class AppSettings(BaseModel):
     SANDBOX_WORKSPACE_CACHE_RETRY_COUNT: int = Field(default=3, ge=1, le=3)
     SANDBOX_WORKSPACE_CACHE_RETRY_BACKOFF_SECONDS: float = Field(default=1.0, ge=0)
     SANDBOX_WORKSPACE_RECLAIM_BATCH_SIZE: int = Field(default=100, ge=1)
+    SANDBOX_WORKSPACE_TRANSITION_WAIT_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0)
+    SANDBOX_WORKSPACE_TRANSITION_POLL_INTERVAL_SECONDS: float = Field(default=0.1, gt=0)
 
 
 def _run_async(coro):

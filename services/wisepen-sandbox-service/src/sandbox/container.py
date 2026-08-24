@@ -35,16 +35,17 @@ class Container(containers.DeclarativeContainer):
     container_manager = providers.Singleton(
         ContainerManager
     )
+    workspace_cache = providers.Singleton(
+        LocalWorkspaceCache,
+        root=settings.SANDBOX_WORKSPACE_CACHE_ROOT,
+        max_bytes=settings.SANDBOX_WORKSPACE_CACHE_MAX_BYTES,
+    )
     workspace_allocator = providers.Singleton(
         WorkspaceAllocator,
         sandbox_repository=sandbox_repository,
         workspace_repository=workspace_repository,
         container_manager=container_manager,
-    )
-    workspace_cache = providers.Singleton(
-        LocalWorkspaceCache,
-        root=settings.SANDBOX_WORKSPACE_CACHE_ROOT,
-        max_bytes=settings.SANDBOX_WORKSPACE_CACHE_MAX_BYTES,
+        workspace_cache=workspace_cache,
     )
     workspace_reclaimer = providers.Singleton(
         WorkspaceReclaimer,
@@ -55,8 +56,10 @@ class Container(containers.DeclarativeContainer):
     watcher = providers.Singleton(
         Watcher,
         sandbox_repository=sandbox_repository,
+        workspace_repository=workspace_repository,
         sandbox_provider_manager=sandbox_provider_manager,
-        container_manager=container_manager
+        container_manager=container_manager,
+        workspace_reclaimer=workspace_reclaimer,
     )
 
 

@@ -34,61 +34,32 @@ class WorkspaceReclaimer:
             return
 
         bundle = workspace.export_bundle
-        if bundle is not None:
-            # 已落库的缓存表示此前仅目录删除失败，不能重新导出并覆盖该缓存。
-            expected_path = self._workspace_cache.cache_path(workspace.id)
-            bundle_path = Path(bundle.bundle_path).expanduser().resolve() if bundle.bundle_path else None
-            if (
-                bundle.workspace_id != workspace.id
-                or bundle_path != expected_path.resolve()
-                or not expected_path.is_dir()
-                or expected_path.is_symlink()
-            ):
-                error("workspace cache bundle is invalid", workspace_id=workspace.id)
-                return
-        else:
+        if bundle is None:
+            # 首次回收先导出缓存；缓存失败后仍清理容器目录，只有清理成功才能标记 LOST。
             bundle = await self._export_with_retries(workspace)
             if bundle is None:
-                # 缓存重试耗尽后仍删除容器目录；只有目录清理成功才能标记为 LOST。
                 try:
-                    await self._container_manager.remove_workspace_directory(
-                        workspace.sandbox_id,
-                        workspace.workspace_path,
-                    )
+                    await self._container_manager.remove_workspace_directory(workspace.sandbox_id, workspace.workspace_path)
                 except Exception as exc:
                     error("workspace cleanup after cache failure failed", exc=exc, workspace_id=workspace.id)
                     return
-                await self._workspace_repository.change_state(
-                    workspace.id,
-                    WorkspaceState.LOST,
-                    expected_state=WorkspaceState.EXPORTING,
-                    clear_runtime_binding=True,
-                )
+                await self._workspace_repository.change_state(workspace.id, WorkspaceState.LOST, expected_state=WorkspaceState.EXPORTING, clear_runtime_binding=True)
                 return
-            persisted = await self._workspace_repository.change_state(
-                workspace.id,
-                WorkspaceState.EXPORTING,
-                expected_state=WorkspaceState.EXPORTING,
-                export_bundle=bundle,
-            )
-            if persisted is None:
+            # 先保存缓存引用，再删除容器目录，保证目录删除失败时下一轮可以续作。
+            if await self._workspace_repository.change_state(workspace.id, WorkspaceState.EXPORTING, expected_state=WorkspaceState.EXPORTING, export_bundle=bundle) is None:
                 return
+        elif bundle.workspace_id != workspace.id or not self._workspace_cache.has_valid_bundle(bundle):
+            error("workspace cache bundle is invalid", workspace_id=workspace.id)
+            return
 
-        # 缓存引用已持久化后才删除容器目录，避免导出成功但数据库无恢复入口。
+        # 已有缓存或缓存刚刚落库后，统一执行幂等的容器目录删除。
         try:
             await self._container_manager.remove_workspace_directory(workspace.sandbox_id, workspace.workspace_path)
         except Exception as exc:
             error("workspace directory removal failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
             return
 
-        detached = await self._workspace_repository.change_state(
-            workspace.id,
-            WorkspaceState.DETACHED,
-            expected_state=WorkspaceState.EXPORTING,
-            export_bundle=bundle,
-            clear_runtime_binding=True,
-        )
-        if detached is not None:
+        if await self._workspace_repository.change_state(workspace.id, WorkspaceState.DETACHED, expected_state=WorkspaceState.EXPORTING, export_bundle=bundle, clear_runtime_binding=True) is not None:
             info("workspace reclaimed", workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
 
     async def _export_with_retries(
@@ -100,15 +71,20 @@ class WorkspaceReclaimer:
         for attempt in range(1, attempts + 1):
             staging: Path | None = None
             try:
+                # 每次重试都使用全新的 staging，避免上一次部分复制的文件污染下一次导出。
                 staging = await self._workspace_cache.create_staging_directory(workspace.id)
                 await self._container_manager.export_workspace(workspace.sandbox_id, workspace.workspace_path, staging)
                 return await self._workspace_cache.install(workspace.id, staging)
             except Exception as exc:
                 error("workspace cache export failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id, attempt=attempt)
                 if attempt < attempts and settings.SANDBOX_WORKSPACE_CACHE_RETRY_BACKOFF_SECONDS:
+                    # 退避只发生在还有后续机会时，最后一次失败直接进入 LOST 处理。
                     await asyncio.sleep(settings.SANDBOX_WORKSPACE_CACHE_RETRY_BACKOFF_SECONDS)
             finally:
                 # install 成功会移动 staging；清理不存在的目录是幂等的。
                 if staging is not None:
-                    await self._workspace_cache.discard_staging(staging)
+                    try:
+                        await self._workspace_cache.discard_staging(staging)
+                    except Exception as exc:
+                        error("workspace staging cleanup failed", exc=exc, workspace_id=workspace.id, attempt=attempt)
         return None
