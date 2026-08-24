@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
-from sandbox.application import ContainerManager, Watcher, WorkspaceAllocator
+from sandbox.application import ContainerManager, Watcher, WorkspaceAllocator, WorkspaceReclaimer
 from sandbox.core.config.app_settings import settings
 from sandbox.core.providers import AIOAdapter, SandboxProviderManager
 from sandbox.core.storage.mongo import (
     MongoSandboxRepository,
     MongoWorkspaceRepository,
 )
+from sandbox.core.storage.local import LocalWorkspaceCache
 
 
 def _mongo_client(url: str):
@@ -39,6 +40,17 @@ class Container(containers.DeclarativeContainer):
         sandbox_repository=sandbox_repository,
         workspace_repository=workspace_repository,
         container_manager=container_manager,
+    )
+    workspace_cache = providers.Singleton(
+        LocalWorkspaceCache,
+        root=settings.SANDBOX_WORKSPACE_CACHE_ROOT,
+        max_bytes=settings.SANDBOX_WORKSPACE_CACHE_MAX_BYTES,
+    )
+    workspace_reclaimer = providers.Singleton(
+        WorkspaceReclaimer,
+        workspace_repository=workspace_repository,
+        container_manager=container_manager,
+        workspace_cache=workspace_cache,
     )
     watcher = providers.Singleton(
         Watcher,

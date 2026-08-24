@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Iterable
 
 from beanie import UpdateResponse
 
@@ -91,6 +92,21 @@ class MongoWorkspaceRepository(WorkspaceRepository):
             sort=[("last_accessed_at", 1)],
         ).limit(limit).to_list()
 
+    async def list_by_states(
+        self,
+        states: Iterable[WorkspaceState],
+        limit: int,
+    ) -> list[SessionWorkspaceDocument]:
+        if limit <= 0:
+            return []
+        state_values = list(states)
+        if not state_values:
+            return []
+        return await SessionWorkspaceDocument.find(
+            {"state": {"$in": state_values}},
+            sort=[("updated_at", 1)],
+        ).limit(limit).to_list()
+
     async def touch_if_attached(
         self,
         workspace_id: str,
@@ -135,6 +151,7 @@ class MongoWorkspaceRepository(WorkspaceRepository):
         workspace_id: str,
         state: WorkspaceState,
         expected_state: WorkspaceState | None = None,
+        expected_last_accessed_at: datetime | None = None,
         *,
         export_bundle: WorkspaceExportBundleRef | None = None,
         clear_runtime_binding: bool = False,
@@ -142,6 +159,8 @@ class MongoWorkspaceRepository(WorkspaceRepository):
         filters: dict[str, object] = {"id": workspace_id}
         if expected_state is not None:
             filters["state"] = expected_state
+        if expected_last_accessed_at is not None:
+            filters["last_accessed_at"] = expected_last_accessed_at
         updates: dict[str, object] = {
             "state": state,
             "updated_at": datetime.now(timezone.utc),

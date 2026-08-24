@@ -129,6 +129,40 @@ class ContainerManager:
             message = f"{message}; docker workspace cleanup failed: {cleanup_stderr}"
         raise ServiceException(SandboxErrorCode.DOCKER_RUNTIME_FAILED, message)
 
+    async def export_workspace(
+        self,
+        container_id: str,
+        workspace_path: str,
+        destination: Path,
+    ) -> None:
+        """将容器内工作区内容复制到宿主机 staging 目录。"""
+        if not destination.is_dir():
+            raise ServiceException(SandboxErrorCode.WORKSPACE_PATH_INVALID,f"workspace export destination is not a directory: {destination}")
+        returncode, _, stderr = await self._docker(
+            "cp",
+            f"{container_id}:{workspace_path}/.",
+            f"{destination}/",
+        )
+        if returncode != 0:
+            raise ServiceException(SandboxErrorCode.WORKSPACE_SYNC_FAILED,f"docker cp workspace export failed: {stderr}",)
+
+    async def remove_workspace_directory(
+        self,
+        container_id: str,
+        workspace_path: str,
+    ) -> None:
+        """幂等删除容器内工作区目录。"""
+        returncode, _, stderr = await self._docker(
+            "exec",
+            container_id,
+            "rm",
+            "-rf",
+            "--",
+            workspace_path,
+        )
+        if returncode != 0 and not self._is_not_found(stderr):
+            raise ServiceException(SandboxErrorCode.WORKSPACE_SYNC_FAILED,f"workspace directory removal failed: {stderr}")
+
     async def _docker(self, *args: str) -> tuple[int, str, str]:
         try:
             process = await asyncio.create_subprocess_exec(

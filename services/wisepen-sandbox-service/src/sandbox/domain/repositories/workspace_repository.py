@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol
+from typing import Iterable, Protocol
 
 from sandbox.domain.entities import (
     SessionWorkspaceDocument,
@@ -57,6 +57,14 @@ class WorkspaceRepository(Protocol):
         """查询最近访问时间早于截止时间且仍在容器中的工作区。"""
         ...
 
+    async def list_by_states(
+        self,
+        states: Iterable[WorkspaceState],
+        limit: int,
+    ) -> list[SessionWorkspaceDocument]:
+        """按工作区状态读取有限数量的记录。"""
+        ...
+
     async def touch_if_attached(
         self,
         workspace_id: str,
@@ -76,6 +84,7 @@ class WorkspaceRepository(Protocol):
         workspace_id: str,
         state: WorkspaceState,
         expected_state: WorkspaceState | None = None,
+        expected_last_accessed_at: datetime | None = None,
         *,
         export_bundle: WorkspaceExportBundleRef | None = None,
         clear_runtime_binding: bool = False,
