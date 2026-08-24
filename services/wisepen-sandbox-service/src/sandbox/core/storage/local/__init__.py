@@ -1,3 +1,3 @@
-from sandbox.core.storage.local.workspace_cache import LocalWorkspaceCache
+from sandbox.core.storage.local.workspace_snapshot_store import LocalWorkspaceSnapshotStore
 
-__all__ = ["LocalWorkspaceCache"]
+__all__ = ["LocalWorkspaceSnapshotStore"]

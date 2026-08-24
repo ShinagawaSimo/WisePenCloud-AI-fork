@@ -7,7 +7,7 @@ from beanie import UpdateResponse
 
 from sandbox.domain.entities import (
     SessionWorkspaceDocument,
-    WorkspaceExportBundleRef,
+    WorkspaceSnapshotRef,
     WorkspaceState,
 )
 from sandbox.domain.repositories import WorkspaceRepository
@@ -157,7 +157,7 @@ class MongoWorkspaceRepository(WorkspaceRepository):
         expected_state: WorkspaceState | None = None,
         expected_last_accessed_at: datetime | None = None,
         *,
-        export_bundle: WorkspaceExportBundleRef | None = None,
+        workspace_snapshot: WorkspaceSnapshotRef | None = None,
         clear_runtime_binding: bool = False,
     ) -> SessionWorkspaceDocument | None:
         filters: dict[str, object] = {"id": workspace_id}
@@ -169,8 +169,8 @@ class MongoWorkspaceRepository(WorkspaceRepository):
             "state": state,
             "updated_at": datetime.now(timezone.utc),
         }
-        if export_bundle is not None:
-            updates["export_bundle"] = export_bundle.model_dump()
+        if workspace_snapshot is not None:
+            updates["workspace_snapshot"] = workspace_snapshot.model_dump()
         if clear_runtime_binding:
             updates.update({"sandbox_id": None, "workspace_path": None})
         return await SessionWorkspaceDocument.find_one(

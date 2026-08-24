@@ -95,23 +95,23 @@ class ContainerManager:
             )
         return workspace_path
 
-    async def restore_cached_workspace(
+    async def restore_workspace_snapshot(
         self,
         container_id: str,
         workspace_id: str,
     ) -> str:
-        """将宿主机缓存的 workspace 恢复至容器内同名目录。"""
-        cache_path = Path(settings.SANDBOX_WORKSPACE_CACHE_ROOT) / workspace_id
-        if not cache_path.is_dir():
+        """将宿主机快照恢复至容器内同名目录。"""
+        snapshot_path = Path(settings.SANDBOX_WORKSPACE_SNAPSHOT_ROOT) / workspace_id
+        if not snapshot_path.is_dir():
             raise ServiceException(
                 SandboxErrorCode.DOCKER_RUNTIME_FAILED,
-                f"workspace cache directory does not exist: {cache_path}",
+                f"workspace snapshot directory does not exist: {snapshot_path}",
             )
 
         workspace_path = await self.create_workspace_directory(container_id, workspace_id)
         returncode, _, stderr = await self._docker(
             "cp",
-            f"{cache_path}/.",
+            f"{snapshot_path}/.",
             f"{container_id}:{workspace_path}",
         )
         if returncode == 0:

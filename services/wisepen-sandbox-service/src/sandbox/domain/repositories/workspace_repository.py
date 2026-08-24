@@ -5,7 +5,7 @@ from typing import Iterable, Protocol
 
 from sandbox.domain.entities import (
     SessionWorkspaceDocument,
-    WorkspaceExportBundleRef,
+    WorkspaceSnapshotRef,
     WorkspaceState,
 )
 
@@ -87,8 +87,8 @@ class WorkspaceRepository(Protocol):
         expected_state: WorkspaceState | None = None,
         expected_last_accessed_at: datetime | None = None,
         *,
-        export_bundle: WorkspaceExportBundleRef | None = None,
+        workspace_snapshot: WorkspaceSnapshotRef | None = None,
         clear_runtime_binding: bool = False,
     ) -> SessionWorkspaceDocument | None:
-        """原子更新 workspace 状态，可选地写入缓存引用或清理运行时绑定。"""
+        """原子更新 workspace 状态，可选地写入快照引用或清理运行时绑定。"""
         ...

@@ -6,7 +6,7 @@ from datetime import timedelta, datetime, timezone
 
 from common.logger import error, info
 from sandbox.application.container_manager import ContainerManager, ContainerStatus
-from sandbox.application.workspace_reclaimer import WorkspaceReclaimer
+from sandbox.application.workspace_releaser import WorkspaceReleaser
 from sandbox.core.config.app_settings import settings
 from sandbox.core.providers import SandboxProviderManager
 from sandbox.domain.interfaces import SandboxProviderInfo
@@ -24,16 +24,16 @@ class Watcher:
         workspace_repository: WorkspaceRepository,
         sandbox_provider_manager: SandboxProviderManager,
         container_manager: ContainerManager,
-        workspace_reclaimer: WorkspaceReclaimer,
+        workspace_releaser: WorkspaceReleaser,
     ) -> None:
         self._sandbox_repository = sandbox_repository
         self._workspace_repository = workspace_repository
         self._sandbox_provider_manager = sandbox_provider_manager
         self._container_manager = container_manager
-        self._workspace_reclaimer = workspace_reclaimer
+        self._workspace_releaser = workspace_releaser
         self._stop = asyncio.Event()
         self._lock = asyncio.Lock()
-        self._last_workspace_reclaim_at: datetime | None = None
+        self._last_workspace_release_at: datetime | None = None
 
     async def maintain_sandbox_pool(self) -> int:
         """检查沙箱池并按目标数量补充预热容器。"""
@@ -150,15 +150,15 @@ class Watcher:
                 error("sandbox watcher iteration failed", exc=exc)
             now = datetime.now(timezone.utc)
             if (
-                self._last_workspace_reclaim_at is None
-                or (now - self._last_workspace_reclaim_at).total_seconds()
-                >= settings.SANDBOX_WORKSPACE_RECLAIM_INTERVAL_SECONDS
+                self._last_workspace_release_at is None
+                or (now - self._last_workspace_release_at).total_seconds()
+                >= settings.SANDBOX_WORKSPACE_RELEASE_INTERVAL_SECONDS
             ):
-                self._last_workspace_reclaim_at = now
+                self._last_workspace_release_at = now
                 try:
-                    await self.reclaim_idle_workspaces()
+                    await self.release_idle_workspaces()
                 except Exception as exc:
-                    error("workspace reclaim iteration failed", exc=exc)
+                    error("workspace release iteration failed", exc=exc)
             try:
                 await asyncio.wait_for(
                     self._stop.wait(),
@@ -171,32 +171,32 @@ class Watcher:
         # 请求 watcher 循环停止
         self._stop.set()
 
-    async def reclaim_idle_workspaces(self) -> None:
-        """按“续作导出任务 -> 抢占空闲工作区 -> 销毁空沙箱”顺序执行一轮回收。"""
+    async def release_idle_workspaces(self) -> None:
+        """按“续作导出任务 -> 抢占空闲工作区 -> 销毁空沙箱”顺序执行一轮释放。"""
         started = time.monotonic()
-        stats = {"exporting": 0, "attached": 0, "claimed": 0, "reclaimed": 0, "destroyed": 0}
+        stats = {"exporting": 0, "attached": 0, "claimed": 0, "released": 0, "destroyed": 0}
         sandbox_ids: set[str] = set()
         async with self._lock:
-            # 先处理已经进入 EXPORTING 的记录：其中可能已经完成缓存，只差删除容器目录。
+            # 先处理已经进入 EXPORTING 的记录：其中可能已经完成快照，只差删除容器目录。
             # 优先续作可以避免这些工作区长期占用沙箱运行时资源。
             exporting = await self._workspace_repository.list_by_states(
                 [WorkspaceState.EXPORTING],
-                settings.SANDBOX_WORKSPACE_RECLAIM_BATCH_SIZE,
+                settings.SANDBOX_WORKSPACE_RELEASE_BATCH_SIZE,
             )
             stats["exporting"] = len(exporting)
             for workspace in exporting:
                 if workspace.sandbox_id:
                     sandbox_ids.add(workspace.sandbox_id)
                 try:
-                    await self._workspace_reclaimer.reclaim_exporting(workspace)
-                    stats["reclaimed"] += 1
+                    await self._workspace_releaser.release_exporting(workspace)
+                    stats["released"] += 1
                 except Exception as exc:
-                    error("workspace reclaim failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
+                    error("workspace release failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
 
-            # 再扫描达到空闲阈值的 ATTACHED 工作区。查询结果只是候选，不能直接回收。
+            # 再扫描达到空闲阈值的 ATTACHED 工作区。查询结果只是候选，不能直接释放。
             # 用户请求可能在扫描后到达，因此必须用 state + last_accessed_at 做 CAS 抢占。
             cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.SANDBOX_WORKSPACE_IDLE_TIMEOUT_SECONDS)
-            attached = await self._workspace_repository.list_idle_attached(cutoff, settings.SANDBOX_WORKSPACE_RECLAIM_BATCH_SIZE)
+            attached = await self._workspace_repository.list_idle_attached(cutoff, settings.SANDBOX_WORKSPACE_RELEASE_BATCH_SIZE)
             stats["attached"] = len(attached)
             for workspace in attached:
                 if workspace.sandbox_id:
@@ -212,12 +212,12 @@ class Watcher:
                         # CAS 失败说明工作区已被访问或被其他流程处理，本轮跳过即可。
                         continue
                     stats["claimed"] += 1
-                    await self._workspace_reclaimer.reclaim_exporting(claimed)
-                    stats["reclaimed"] += 1
+                    await self._workspace_releaser.release_exporting(claimed)
+                    stats["released"] += 1
                 except Exception as exc:
-                    error("idle workspace reclaim failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
+                    error("idle workspace release failed", exc=exc, workspace_id=workspace.id, sandbox_id=workspace.sandbox_id)
 
-            # 工作区回收完成后再按沙箱去重检查。只有没有 ATTACHED、EXPORTING、IMPORTING
+            # 工作区释放完成后再按沙箱去重检查。只有没有 ATTACHED、EXPORTING、IMPORTING
             # 工作区时才允许进入 DESTROYING，避免删除仍被使用或仍在恢复中的容器。
             for sandbox_id in sandbox_ids:
                 try:
@@ -225,7 +225,7 @@ class Watcher:
                         stats["destroyed"] += 1
                 except Exception as exc:
                     error("idle sandbox destroy failed", exc=exc, sandbox_id=sandbox_id)
-        info("workspace reclaim scan finished", **stats, duration_ms=round((time.monotonic() - started) * 1000, 2))
+        info("workspace release scan finished", **stats, duration_ms=round((time.monotonic() - started) * 1000, 2))
 
     async def _destroy_sandbox_if_idle(self, sandbox_id: str) -> bool:
         """仅当沙箱没有 ATTACHED/EXPORTING/IMPORTING 工作区时发起销毁。"""

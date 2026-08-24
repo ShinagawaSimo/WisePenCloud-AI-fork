@@ -16,18 +16,18 @@ class WorkspaceState(StrEnum):
     LOST = "lost"
 
 
-class WorkspaceExportBundleRef(BaseModel):
-    """容器释放后导出的 workspace 数据包引用"""
+class WorkspaceSnapshotRef(BaseModel):
+    """容器释放后导出的 workspace 快照引用"""
 
-    id: str = Field(..., description="工作区导出包 ID")
+    id: str = Field(..., description="工作区快照 ID")
     workspace_id: str = Field(..., description="所属 workspace ID")
 
-    bundle_path: str | None = Field(default=None, description="当前导出包的物理路径")
+    snapshot_path: str | None = Field(default=None, description="当前快照的物理路径")
 
     exported_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="导出时间")
-    total_bytes: int = Field(default=0, description="导出包总大小，单位字节")
-    file_count: int = Field(default=0, description="导出包中的文件数")
-    directory_count: int = Field(default=0, description="导出包中的目录数")
+    total_bytes: int = Field(default=0, description="快照总大小，单位字节")
+    file_count: int = Field(default=0, description="快照中的文件数")
+    directory_count: int = Field(default=0, description="快照中的目录数")
 
 class SessionWorkspaceDocument(Document):
     """Session Workspace 权威记录"""
@@ -40,7 +40,7 @@ class SessionWorkspaceDocument(Document):
     sandbox_id: str | None = Field(default=None, description="当前关联的沙箱 ID")
     workspace_path: str | None = Field(default=None, description="容器内 workspace 的物理路径")
 
-    export_bundle: WorkspaceExportBundleRef | None = Field(default=None, description="导出的 workspace 数据包")
+    workspace_snapshot: WorkspaceSnapshotRef | None = Field(default=None, description="导出的 workspace 快照")
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="创建时间")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="最近更新时间")

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
-from sandbox.application import ContainerManager, Watcher, WorkspaceAllocator, WorkspaceReclaimer
+from sandbox.application import ContainerManager, Watcher, WorkspaceAllocator, WorkspaceReleaser
 from sandbox.core.config.app_settings import settings
 from sandbox.core.providers import AIOAdapter, SandboxProviderManager
 from sandbox.core.storage.mongo import (
     MongoSandboxRepository,
     MongoWorkspaceRepository,
 )
-from sandbox.core.storage.local import LocalWorkspaceCache
+from sandbox.core.storage.local import LocalWorkspaceSnapshotStore
 
 
 def _mongo_client(url: str):
@@ -35,23 +35,23 @@ class Container(containers.DeclarativeContainer):
     container_manager = providers.Singleton(
         ContainerManager
     )
-    workspace_cache = providers.Singleton(
-        LocalWorkspaceCache,
-        root=settings.SANDBOX_WORKSPACE_CACHE_ROOT,
-        max_bytes=settings.SANDBOX_WORKSPACE_CACHE_MAX_BYTES,
+    workspace_snapshot_store = providers.Singleton(
+        LocalWorkspaceSnapshotStore,
+        root=settings.SANDBOX_WORKSPACE_SNAPSHOT_ROOT,
+        max_bytes=settings.SANDBOX_WORKSPACE_SNAPSHOT_MAX_BYTES,
     )
     workspace_allocator = providers.Singleton(
         WorkspaceAllocator,
         sandbox_repository=sandbox_repository,
         workspace_repository=workspace_repository,
         container_manager=container_manager,
-        workspace_cache=workspace_cache,
+        workspace_snapshot_store=workspace_snapshot_store,
     )
-    workspace_reclaimer = providers.Singleton(
-        WorkspaceReclaimer,
+    workspace_releaser = providers.Singleton(
+        WorkspaceReleaser,
         workspace_repository=workspace_repository,
         container_manager=container_manager,
-        workspace_cache=workspace_cache,
+        workspace_snapshot_store=workspace_snapshot_store,
     )
     watcher = providers.Singleton(
         Watcher,
@@ -59,7 +59,7 @@ class Container(containers.DeclarativeContainer):
         workspace_repository=workspace_repository,
         sandbox_provider_manager=sandbox_provider_manager,
         container_manager=container_manager,
-        workspace_reclaimer=workspace_reclaimer,
+        workspace_releaser=workspace_releaser,
     )
 
 

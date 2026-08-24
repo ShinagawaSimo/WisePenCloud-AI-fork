@@ -17,7 +17,7 @@ class AppSettings(BaseModel):
 
     这些配置只覆盖 core 的池容量、warmup、销毁、重试和鉴权参数。应用启动
     前会由 Nacos 提供完整配置。Mongo 配置用于持久化 sandbox/workspace 权威状态，
-    Workspace 配置用于受管目录、快照缓存和后台淘汰策略。
+    Workspace 配置用于受管目录、快照存储和后台释放策略。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -43,21 +43,17 @@ class AppSettings(BaseModel):
     # 状态检查时间间隔
     SANDBOX_WATCHER_INTERVAL_SECONDS: float
 
-    # workspace 容器目录、快照缓存容量和后台淘汰配置。
+    # workspace 容器目录和快照存储配置。
     SANDBOX_CONTAINER_WORKSPACE_ROOT: str = "./data/workspaces"
-    SANDBOX_WORKSPACE_CACHE_ROOT: str = "./data/workspace-cache"
-    SANDBOX_WORKSPACE_SNAPSHOT_TTL_SECONDS: int = 7 * 24 * 60 * 60
-    SANDBOX_WORKSPACE_CACHE_MAX_BYTES: int = 0
-    SANDBOX_WORKSPACE_CACHE_HIGH_WATERMARK_RATIO: float = 0.8
-    SANDBOX_WORKSPACE_CACHE_TARGET_WATERMARK_RATIO: float = 0.7
-    SANDBOX_WORKSPACE_EVICTION_INTERVAL_SECONDS: float = 3600.0
+    SANDBOX_WORKSPACE_SNAPSHOT_ROOT: str = "./data/workspace-snapshots"
+    SANDBOX_WORKSPACE_SNAPSHOT_MAX_BYTES: int = 0
 
-    # 空闲工作区自动回收配置。
+    # 空闲工作区自动释放配置。
     SANDBOX_WORKSPACE_IDLE_TIMEOUT_SECONDS: int = Field(default=900, gt=0)
-    SANDBOX_WORKSPACE_RECLAIM_INTERVAL_SECONDS: float = Field(default=60.0, gt=0)
-    SANDBOX_WORKSPACE_CACHE_RETRY_COUNT: int = Field(default=3, ge=1, le=3)
-    SANDBOX_WORKSPACE_CACHE_RETRY_BACKOFF_SECONDS: float = Field(default=1.0, ge=0)
-    SANDBOX_WORKSPACE_RECLAIM_BATCH_SIZE: int = Field(default=100, ge=1)
+    SANDBOX_WORKSPACE_RELEASE_INTERVAL_SECONDS: float = Field(default=60.0, gt=0)
+    SANDBOX_WORKSPACE_SNAPSHOT_RETRY_COUNT: int = Field(default=3, ge=1, le=3)
+    SANDBOX_WORKSPACE_SNAPSHOT_RETRY_BACKOFF_SECONDS: float = Field(default=1.0, ge=0)
+    SANDBOX_WORKSPACE_RELEASE_BATCH_SIZE: int = Field(default=100, ge=1)
     SANDBOX_WORKSPACE_TRANSITION_WAIT_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0)
     SANDBOX_WORKSPACE_TRANSITION_POLL_INTERVAL_SECONDS: float = Field(default=0.1, gt=0)
 
